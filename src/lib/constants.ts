@@ -1,4 +1,4 @@
-export let RiskLevel = {
+export const RiskLevel = {
     LOW: 'LOW',
     MEDIUM: 'MEDIUM',
     HIGH: 'HIGH',
@@ -6,7 +6,7 @@ export let RiskLevel = {
 
 export type RiskLevel = typeof RiskLevel[keyof typeof RiskLevel]
 
-export let Severity = {
+export const Severity = {
     LOW: 'LOW',
     MEDIUM: 'MEDIUM',
     HIGH: 'HIGH',
