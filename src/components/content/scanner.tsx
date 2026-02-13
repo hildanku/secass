@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useForm } from '@tanstack/react-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,36 +7,33 @@ import { PdfGenerator } from '@/lib/pdf-generator'
 import { AlertCircle, Download, Shield, Loader2 } from 'lucide-react'
 
 export function SecurityScanner() {
-    const [loading, setLoading] = useState(false)
-    const [result, setResult] = useState<ScanResult | null>(null)
-    const [error, setError] = useState<string | null>(null)
-
     const form = useForm({
         defaultValues: {
             url: '',
+            result: null as ScanResult | null,
+            error: null as string | null,
         },
-        onSubmit: async ({ value }) => {
-            setLoading(true)
-            setError(null)
-            setResult(null)
+        onSubmit: async ({ value, formApi }) => {
+            // Clear previous results
+            formApi.setFieldValue('error', null)
+            formApi.setFieldValue('result', null)
 
             try {
                 const response = await performScan({ url: value.url }, 'browser-client')
 
                 if (response.success && response.data) {
-                    setResult(response.data)
+                    formApi.setFieldValue('result', response.data)
                 } else {
-                    setError(response.error || 'Scan failed')
+                    formApi.setFieldValue('error', response.error || 'Scan failed')
                 }
             } catch (err) {
-                setError(err instanceof Error ? err.message : 'An unexpected error occurred')
-            } finally {
-                setLoading(false)
+                formApi.setFieldValue('error', err instanceof Error ? err.message : 'An unexpected error occurred')
             }
         },
     })
 
     const handleDownloadPdf = () => {
+        const result = form.getFieldValue('result')
         if (!result) return
 
         const pdfGenerator = new PdfGenerator()
@@ -115,7 +111,7 @@ export function SecurityScanner() {
                                             onBlur={field.handleBlur}
                                             onChange={(e) => field.handleChange(e.target.value)}
                                             placeholder="https://example.com"
-                                            disabled={loading}
+                                            disabled={form.state.isSubmitting}
                                             className="w-full"
                                         />
                                         {field.state.meta.errors ? (
@@ -129,10 +125,10 @@ export function SecurityScanner() {
 
                             <Button
                                 type="submit"
-                                disabled={loading}
+                                disabled={form.state.isSubmitting}
                                 className="w-full"
                             >
-                                {loading ? (
+                                {form.state.isSubmitting ? (
                                     <>
                                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                                         Scanning...
@@ -153,106 +149,109 @@ export function SecurityScanner() {
                     </div>
 
                     {/* Error Display */}
-                    {error && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start">
-                            <AlertCircle className="w-5 h-5 text-red-600 mr-3 shrink-0 mt-0.5" />
-                            <div>
-                                <h3 className="font-semibold text-red-800">Error</h3>
-                                <p className="text-red-700">{error}</p>
+                    <form.Field name="error">
+                        {(field) => field.state.value && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start">
+                                <AlertCircle className="w-5 h-5 text-red-600 mr-3 shrink-0 mt-0.5" />
+                                <div>
+                                    <h3 className="font-semibold text-red-800">Error</h3>
+                                    <p className="text-red-700">{field.state.value}</p>
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </form.Field>
                 </div>
 
                 {/* Right Column - Results */}
                 <div>
-                    {result && (
-                        <div className="space-y-6">
-                            {/* Score Card */}
-                            <div className={`rounded-lg border p-6 ${getRiskBgColor(result.score)}`}>
-                                <h2 className="text-xl font-bold mb-2">Security Score</h2>
-                                <p className={`text-5xl font-bold ${getRiskColor(result.score)}`}>
-                                    {result.score}/100
-                                </p>
-                                <p className="text-lg font-semibold mt-2">
-                                    Risk Level: {result.riskLevel}
-                                </p>
-                                <div className="mt-4">
-                                    <div className="mb-2">
-                                        <p className="text-sm text-gray-600">Scanned URL</p>
-                                        <p className="font-mono text-sm break-all">{result.url}</p>
-                                    </div>
-                                    <div className="mb-3">
-                                        <p className="text-sm text-gray-600">Scan Time</p>
-                                        <p className="text-sm">{new Date(result.timestamp).toLocaleString()}</p>
-                                    </div>
-                                    <Button onClick={handleDownloadPdf} variant="outline" size="sm">
-                                        <Download className="w-4 h-4 mr-2" />
-                                        Download PDF
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {/* Summary */}
-                            <div className="bg-white rounded-lg shadow p-6">
-                                <h3 className="text-lg font-bold mb-4">Summary</h3>
-                                <div className="grid grid-cols-3 gap-3">
-                                    <div className="text-center p-3 bg-blue-50 rounded">
-                                        <p className="text-2xl font-bold text-blue-600">{result.summary.totalChecks}</p>
-                                        <p className="text-xs text-gray-600">Total Checks</p>
-                                    </div>
-                                    <div className="text-center p-3 bg-green-50 rounded">
-                                        <p className="text-2xl font-bold text-green-600">{result.summary.passedChecks}</p>
-                                        <p className="text-xs text-gray-600">Passed</p>
-                                    </div>
-                                    <div className="text-center p-3 bg-red-50 rounded">
-                                        <p className="text-2xl font-bold text-red-600">{result.summary.failedChecks}</p>
-                                        <p className="text-xs text-gray-600">Failed</p>
+                    <form.Field name="result">
+                        {(field) => field.state.value && (
+                            <div className="space-y-6">
+                                {/* Score Card */}
+                                <div className={`rounded-lg border p-6 ${getRiskBgColor(field.state.value.score)}`}>
+                                    <h2 className="text-xl font-bold mb-2">Security Score</h2>
+                                    <p className={`text-5xl font-bold ${getRiskColor(field.state.value.score)}`}>
+                                        {field.state.value.score}/100
+                                    </p>
+                                    <p className="text-lg font-semibold mt-2">
+                                        Risk Level: {field.state.value.riskLevel}
+                                    </p>
+                                    <div className="mt-4">
+                                        <div className="mb-2">
+                                            <p className="text-sm text-gray-600">Scanned URL</p>
+                                            <p className="font-mono text-sm break-all">{field.state.value.url}</p>
+                                        </div>
+                                        <div className="mb-3">
+                                            <p className="text-sm text-gray-600">Scan Time</p>
+                                            <p className="text-sm">{new Date(field.state.value.timestamp).toLocaleString()}</p>
+                                        </div>
+                                        <Button onClick={handleDownloadPdf} variant="outline" size="sm">
+                                            <Download className="w-4 h-4 mr-2" />
+                                            Download PDF
+                                        </Button>
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* Findings */}
-                            <div className="bg-white rounded-lg shadow p-6">
-                                <h3 className="text-lg font-bold mb-4">Detailed Findings</h3>
+                                {/* Summary */}
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <h3 className="text-lg font-bold mb-4">Summary</h3>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div className="text-center p-3 bg-blue-50 rounded">
+                                            <p className="text-2xl font-bold text-blue-600">{field.state.value.summary.totalChecks}</p>
+                                            <p className="text-xs text-gray-600">Total Checks</p>
+                                        </div>
+                                        <div className="text-center p-3 bg-green-50 rounded">
+                                            <p className="text-2xl font-bold text-green-600">{field.state.value.summary.passedChecks}</p>
+                                            <p className="text-xs text-gray-600">Passed</p>
+                                        </div>
+                                        <div className="text-center p-3 bg-red-50 rounded">
+                                            <p className="text-2xl font-bold text-red-600">{field.state.value.summary.failedChecks}</p>
+                                            <p className="text-xs text-gray-600">Failed</p>
+                                        </div>
+                                    </div>
+                                </div>
 
-                                {result.findings.length === 0 ? (
-                                    <div className="text-center py-8 text-green-600">
-                                        <Shield className="w-12 h-12 mx-auto mb-3" />
-                                        <p className="text-lg font-semibold">No security issues detected!</p>
-                                        <p className="text-gray-600 text-sm">Your website passed all security checks.</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {result.findings.map((finding, index) => (
-                                            <div key={index} className="border rounded-lg p-4">
-                                                <div className="flex items-start justify-between mb-2">
-                                                    <h4 className="font-semibold">{finding.title}</h4>
-                                                    <span className={`px-2 py-1 rounded text-xs font-semibold ${getSeverityColor(finding.severity)}`}>
-                                                        {finding.severity}
-                                                    </span>
+                                {/* Findings */}
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <h3 className="text-lg font-bold mb-4">Detailed Findings</h3>
+
+                                    {field.state.value.findings.length === 0 ? (
+                                        <div className="text-center py-8 text-green-600">
+                                            <Shield className="w-12 h-12 mx-auto mb-3" />
+                                            <p className="text-lg font-semibold">No security issues detected!</p>
+                                            <p className="text-gray-600 text-sm">Your website passed all security checks.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {field.state.value.findings.map((finding, index) => (
+                                                <div key={index} className="border rounded-lg p-4">
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <h4 className="font-semibold">{finding.title}</h4>
+                                                        <span className={`px-2 py-1 rounded text-xs font-semibold ${getSeverityColor(finding.severity)}`}>
+                                                            {finding.severity}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm text-gray-600 mb-2">
+                                                        <strong>Module:</strong> {finding.module}
+                                                    </p>
+                                                    <p className="text-sm text-gray-700 mb-3">{finding.description}</p>
+                                                    <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded">
+                                                        <p className="text-sm font-semibold text-blue-900 mb-1">Recommendation:</p>
+                                                        <p className="text-sm text-blue-800">{finding.recommendation}</p>
+                                                    </div>
+                                                    <p className="text-xs text-gray-500 mt-2">
+                                                        Impact: -{finding.scoreImpact} points
+                                                    </p>
                                                 </div>
-                                                <p className="text-sm text-gray-600 mb-2">
-                                                    <strong>Module:</strong> {finding.module}
-                                                </p>
-                                                <p className="text-sm text-gray-700 mb-3">{finding.description}</p>
-                                                <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded">
-                                                    <p className="text-sm font-semibold text-blue-900 mb-1">Recommendation:</p>
-                                                    <p className="text-sm text-blue-800">{finding.recommendation}</p>
-                                                </div>
-                                                <p className="text-xs text-gray-500 mt-2">
-                                                    Impact: -{finding.scoreImpact} points
-                                                </p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    )
-                    }
-                </div >
-            </div >
-        </div >
+                        )}
+                    </form.Field>
+                </div>
+            </div>
+        </div>
     )
 }
